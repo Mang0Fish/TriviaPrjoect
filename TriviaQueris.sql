@@ -111,3 +111,43 @@ begin
 end;
 $$;
 
+
+--This function show how many players played
+create or replace function players_played()
+returns int as $$
+declare 
+	x int := 0;
+	i record;
+begin 
+	for i in (select player_id, questions_solved from players) loop
+		if i.questions_solved != 0 THEN
+			x := x + 1;
+		end if;
+	end loop;
+	return x;
+end;
+$$ language plpgsql;
+
+select players_played();
+
+
+--Login function
+create or replace function user_login(_username text, _password text)
+returns int as $$
+begin
+	if (select password from players where username = _username) = _password then
+		return (select player_id from players where username = _username);
+	else
+		return 0;
+	end if;
+end;
+$$ language plpgsql;
+
+
+--This function returns the amount of unanswered questions
+create or replace function unanswered_questions(_id int)
+returns int as $$
+begin 	
+	return 20 - (select count(*) from player_answers where player_id = _id);
+end;
+$$ language plpgsql;
