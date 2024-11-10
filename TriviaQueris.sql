@@ -144,10 +144,63 @@ end;
 $$ language plpgsql;
 
 
---This function returns the amount of unanswered questions
-create or replace function unanswered_questions(_id int)
-returns int as $$
+--This function returns the id of questions that have been answered by id
+create or replace function answered_questions(_id int)
+returns int[] as $$
+declare 
+	i int:= 0;
+	answered int[];
 begin 	
-	return 20 - (select count(*) from player_answers where player_id = _id);
+	select array(select question_id from player_answers where player_id = _id)
+	into answered;
+	return answered;
 end;
 $$ language plpgsql;
+
+
+--This function returns the amount of correct and incorrect answeres in an array
+create or replace function answers_amount(_id int)
+returns int [] as $$
+declare 
+	answered int[] := ARRAY[0, 0];  
+    correct_count int;
+    incorrect_count int;
+begin
+	select count(*) into correct_count from player_answers where player_id = _id and is_correct = true;
+	select count(*) into incorrect_count from player_answers where player_id = _id and is_correct = false;
+	
+    answered[1] := correct_count;
+	answered[2] := incorrect_count;
+
+	return answered;
+end;
+$$ language plpgsql;
+
+
+--Bonus function and trigger, updates solved_questions
+create or replace function update_questions_solved()
+returns trigger as $$
+begin 
+	update players 
+	set questions_solved = (select count(*) from player_answers where player_id = new.player_id)
+	where player_id = new.player_id;
+	
+	return new;
+end;
+$$ language plpgsql;
+
+create trigger trigger_update_questions_solved
+after insert on player_answers
+for each row 
+execute function update_questions_solved();
+
+
+--This function reset the players question_solved in both tables
+create or replace procedure reset_solved(_id int)
+language plpgsql
+as $$
+begin 
+	delete from player_answers where player_id = _id;
+	update players set questions_solved = 0 where player_id = _id;
+end;
+$$;
