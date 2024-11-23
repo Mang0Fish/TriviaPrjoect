@@ -112,23 +112,17 @@ end;
 $$;
 
 
---This function show how many players played
+--This function shows how many players played
 create or replace function players_played()
-returns int as $$
-declare 
-	x int := 0;
-	i record;
+returns int as $$	
+declare
+	total int := 0;
 begin 
-	for i in (select player_id, questions_solved from players) loop
-		if i.questions_solved != 0 THEN
-			x := x + 1;
-		end if;
-	end loop;
-	return x;
+	select count(*) into total from players where questions_solved > 0;		
+	return total;
 end;
 $$ language plpgsql;
 
-select players_played();
 
 
 --Login function
@@ -204,3 +198,107 @@ begin
 	update players set questions_solved = 0 where player_id = _id;
 end;
 $$;
+
+
+--This function returns the ids of the question that most players answered correctly
+create or replace function easiest_question()
+returns int[] as $$
+declare 
+	ans int[] = '{}';
+begin 
+	select ARRAY_AGG(question_id) into ans from (
+	select question_id from questions q 
+	join player_answers pa using (question_id)
+	group by question_id having count(is_correct) =  
+	(select count(is_correct) from questions q 
+	join player_answers pa using (question_id) 
+	group by question_id order by count desc limit 1));
+
+	return ans;
+
+
+end;
+$$ language plpgsql;
+
+
+--This function returns the ids of the question that least players answered correctly
+create or replace function hardest_question()
+returns int[] as $$
+declare 
+	ans int[] = '{}';
+begin 
+	select ARRAY_AGG(question_id) into ans from (
+	select question_id from questions q 
+	join player_answers pa using (question_id)
+	group by question_id having count(is_correct) =  
+	(select count(is_correct) from questions q 
+	join player_answers pa using (question_id) 
+	group by question_id order by count limit 1));
+
+	return ans;
+
+
+end;
+$$ language plpgsql;
+
+--This view displays the players that answered most questions correctly in descending order
+create or replace view most_answered_correctly_view as 
+select username, count(is_correct) from players join player_answers pa using (player_id)
+where is_correct = true group by username order by count desc;
+
+
+
+--This view displays the players that answered most questions in descending order
+create or replace view most_answered_totally_view as 
+select username from players order by questions_solved desc;
+
+
+--Bonus, this view displays each question stats
+create or replace view question_stats as
+with total_answers as (
+    select question_id, question_text, count(*) as total
+    from questions
+    join player_answers pa using (question_id)
+    group by question_id, question_text
+),
+correct_answers as (
+    select question_id, count(*) as correct
+    from questions
+    join player_answers pa using (question_id)
+    where is_correct = true
+    group by question_id
+),
+incorrect_answers as (
+    select question_id, count(*) as incorrect
+    from questions
+    join player_answers pa using (question_id)
+    where is_correct = false
+    group by question_id
+)
+select 
+    t.question_text,
+    t.total,
+    c.correct as correct,
+    i.incorrect as incorrect
+from total_answers t
+left join correct_answers c on t.question_id = c.question_id
+left join incorrect_answers i on t.question_id = i.question_id;
+
+--Bonus matplotlib pie chart function that return in an array the values of the pie
+create or replace function question_pie(_id int)
+returns int[] as $$
+declare 
+	ans int[] := ARRAY[0, 0, 0];
+	unanswered int := 20;
+	correct int := 0;
+	incorrect int := 0;
+begin
+	select count(*) into unanswered from player_answers where player_id = _id;
+	select count(*) into correct from player_answers where player_id = _id and is_correct = true; 
+	select count(*) into incorrect from player_answers where player_id = _id and is_correct = false;
+	ans[1] := unanswered;
+	ans[2] := correct;
+	ans[3] := incorrect;
+	return ans;
+end;
+$$ language plpgsql;
