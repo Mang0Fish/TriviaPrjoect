@@ -250,7 +250,7 @@ where is_correct = true group by username order by count desc;
 
 --This view displays the players that answered most questions in descending order
 create or replace view most_answered_totally_view as 
-select username from players order by questions_solved desc;
+select username, questions_solved from players order by questions_solved DESC;
 
 
 --Bonus, this view displays each question stats
